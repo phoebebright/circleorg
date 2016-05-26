@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<style>
+    @import url(https://fonts.googleapis.com/css?family=Source+Sans+Pro:400,300,700);
+    body {
+        margin: 0;
+    }
+    .node {
+        -webkit-tap-highlight-color: rgba(0,0,0,0);
+    }
+    .node:hover {
+        stroke: #000;
+        stroke-width: 1.5px;
+    }
+    .node--leaf {
+        fill: white;
+    }
+    .label {
+        font: 14px "Source Sans Pro", Helvetica, Arial, sans-serif;
+        font-weight: 400;
+        text-anchor: middle;
+        pointer-events: none;
+        cursor: default;
+    }
+    .label,
+    .node--root,
+    .node--leaf {
+        pointer-events: all;
+    }
+    .d3-tooltip-box {
+        background: rgb(200, 200, 200);
+        padding: 5px;
+        border-radius: 2px;
+    }
+
+</style>
+<body>
+<script type="text/javascript" src="http://d3js.org/d3.v3.min.js"></script>
+<script src="lodash.min.js"></script>
+<script src="d3-tooltip-box.min.js"></script>  <!-- https://github.com/roncr/d3-tooltip-box  -->
+<script>
+
+    var tooltip = d3TooltipBox.tooltip()
+            .data(function(d) {
+                return {
+                    value: d.name
+                }
+            });
+
+    var margin = 20,
+            width = window.innerWidth,
+            height =  window.innerHeight,
+            diameter = Math.min( width, height );
+
+    var color = d3.scale.linear()
+            .domain([-1, 5])
+            .range(["hsl(52,80%,80%)", "hsl(228,30%,40%)"])
+            .interpolate(d3.interpolateHcl);
+
+
+    var pack = d3.layout.pack()
+            .padding(2)
+            .size([diameter - margin, diameter - margin])
+            .value(function(d) { return d.size; })
+
+    var zoomBehaviour = d3.behavior.zoom()
+            .scaleExtent([1, 5])
+            .translate( [width/2,height/2] );
+
+    var svg = d3.select("body").append("svg")
+            .attr("width", width)
+            .attr("height", height)
+            .call(zoomBehaviour)
+            .append("g")
+            .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+    var dragBehaviour = d3.behavior.drag();
+    dragBehaviour.active = false;
+
+
+    d3.json("flare.json", function(error, data) {
+        if (error) throw error;
+
+        // Assuming that data is an array of objects
+        var root = {name: 'Invisible Root', children: data };
+
+        var focus = root,
+                nodes = pack.nodes(root),
+                view;
+
+        var background = svg.append('rect').datum( root )
+                .attr('class','background')
+                .attr({
+                    'x':              -width/2,
+                    'y':              -height/2,
+                    'width':          width,
+                    'height':         height,
+                    'pointer-events': 'all',
+                    'fill':           'none'
+                });
+
+        var group = svg.append('g').attr('class','group');
+
+        var circle = group.selectAll(".node")
+                .data(nodes.filter( function(d) { return d.depth !== 0; }),name)
+                .enter().append("circle")
+                .attr("class", function(d) {
+                    return d.parent ? d.children ? "node" : "node node--leaf" : "node node--root";
+                })
+                .style("fill", function(d) {
+                    return d.children ? color(d.depth) : null;
+                })
+                .call(tooltip.bind());
+
+        var text = group.selectAll("text")
+                .data(nodes.filter( function(d) { return d.depth !== 0; }),name)
+                .enter().append("text")
+                .attr("class", "label")
+                .style("fill-opacity", function(d) { return d.parent === root ? 1 : 0; })
+                .style("display", function(d) { return d.parent === root ? "inline" : "none"; })
+                .text(function(d) { return d.name; });
+
+        var node = group.selectAll("circle,text");
+
+        d3.select("body")
+                .style("background", color(-1));
+
+        updateNodes();
+
+        var dragCircle = svg.append('circle').attr({
+            class:            'dragCircle',
+            opacity:          0.9,
+            visibility:       'hidden',
+            'pointer-events': 'none'
+        });
+
+        var selectedCircle = null;
+
+        zoomBehaviour.on("zoom", zoomed);
+        dragBehaviour
+                .on('dragstart', dragStart)
+                .on('drag', dragMove)
+                .on('dragend', dragEnd);
+
+        circle.call(dragBehaviour)
+
+
+        function zoomed() {
+            var translate = d3.event.translate;
+            translate[0] -= width/2;
+            translate[1] -= height/2;
+            group.attr("transform", "translate(" + translate + ")scale(" + d3.event.scale + ")");
+            dragCircle.attr("transform", "translate(" + translate + ")scale(" + d3.event.scale + ")");
+
+            var inverseScale = 1/zoomBehaviour.scale();
+            text.style('font-size', 14*inverseScale)
+                    .style("display", function(d) {
+                        return null;
+                    });
+
+            text.transition().duration(200).style("fill-opacity", function(d) {
+                return +(d.depth === Math.round( zoomBehaviour.scale()/1.2 ));
+            });
+            text.style("display", function(d) {
+                return d.depth === Math.round( zoomBehaviour.scale()/1.2 ) ? 'inline' : 'none';
+            });
+        }
+
+        function updateNodes() {
+            text.style('font-size', function(d) {
+               
+                return 14*1/zoomBehaviour.scale();
+            })
+                    .style("display", function(d) {
+                        return d.depth === Math.round( zoomBehaviour.scale()/1.2 ) ? 'inline' : 'none';
+                    })
+                    .transition().duration(500)
+                    .attr('x', function(d){
+                        return (d.x - diameter/2);
+                    })
+                    .attr('y', function(d){
+                        return (d.y - diameter/2);
+                    });
+
+            circle.attr("class", function(d) { return d.parent ? d.children ? "node" : "node node--leaf" : "node node--root"; })
+                    .transition().duration(500)
+                    .attr("r", function(d) { return d.r; })
+                    .attr('cx', function(d){ return (d.x - diameter/2); })
+                    .attr('cy', function(d){ return (d.y - diameter/2); })
+                    .attr('opacity', 1)
+                    .style("fill", function(d) { return d.children ? color(d.depth) : null; });
+        }
+
+        function dragStart(d,i){
+            d3.event.sourceEvent.stopPropagation();
+        }
+
+        function dragMove(d,i){
+            var m = d3.mouse(d3.select('body').node());
+
+            var pointingElement = document.elementFromPoint(m[0],m[1]);
+            var el = d3.select( pointingElement );
+            if ( el.classed('node') || el.classed('background')) {
+                circle.style('stroke',null);
+                background.style('stroke',null);
+                el.style('stroke','red');
+                selectedCircle = pointingElement.__data__;
+            }
+
+
+            if ( d === root ) return;
+            dragCircle.attr({
+                'visibility': null,
+                cx:           d3.event.x,
+                cy:           d3.event.y,
+                r:            d.children ? 30 : d3.select(this).attr('r')*1.2,
+                fill:         d3.select(this).style('fill')
+            });
+
+            dragBehaviour.active = true;
+            d3.select(this).attr('opacity', 0.3);
+
+        }
+
+        function dragEnd(d,i){
+            dragCircle.attr({ visibility: 'hidden' });
+            d3.select(this).attr('opacity', 1);
+            dragBehaviour.active = false;
+            circle.style('stroke',null);
+            background.style('stroke',null);
+
+            if ( selectedCircle && isChild(d,selectedCircle) ) {
+                selectedCircle = null;
+                return;
+            }
+
+            if ( selectedCircle && selectedCircle !== d && selectedCircle !== d.parent ) {
+
+                // Create new group if dropped on a white circle
+                if ( !selectedCircle.children ) {
+                    var parent = selectedCircle.parent;
+                    var newGroup = {name: 'newGroup', children: [selectedCircle]};
+                    parent.children = _.without(parent.children,selectedCircle);
+                    parent.children.push( newGroup );
+                    selectedCircle = newGroup;
+                }
+
+                selectedCircle.children.push( d );
+                d.parent.children =  _.without(d.parent.children,d);
+
+                // Destroy group if there's no more siblings
+                if ( d.parent.children.length === 0 ) {
+                    delete d.parent.children;
+                } else if ( d.parent.children.length === 1 ) {
+                    var grandParent = d.parent.parent;
+                    if ( grandParent ) {
+                        var onlyChild = d.parent.children[0];
+                        grandParent.children.push( onlyChild );
+                        grandParent.children = _.without(grandParent.children,d.parent);
+                    } else {
+                        root.children = d.parent.children;
+                    }
+
+                }
+
+                nodes = pack.nodes(root);
+                circle = group.selectAll(".node").data(nodes.filter( function(d) { return d.depth !== 0; }),name);
+                circle.enter().append("circle").call(dragBehaviour).on( 'mouseenter.dragdrop', dragSelect )
+                        .attr('opacity', 0)
+                        .style("fill", function(d) { return d.children ? color(d.depth) : null; });
+                circle.exit().remove()
+                circle.sort(function(a,b){ return a.depth - b.depth; });
+
+                text = group.selectAll(".label").data(nodes.filter( function(d) { return d.depth !== 0; }),name);
+                text.enter().append("text").attr("class", "label").text(function(d) { return d.name; });
+                text.exit().remove();
+
+                console.log("Node " + d.name + " has new parent " + d.parent.name);
+
+                updateNodes();
+
+            }
+
+            selectedCircle = null;
+
+        }
+
+        function dragSelect(d,i){
+            if ( !dragBehaviour.active ) return;
+
+            circle.style('stroke',null);
+            background.style('stroke',null);
+            d3.select(this).style('stroke','red');
+            selectedCircle = d;
+        }
+
+    });
+
+    function isChild( obj, child ) {
+        if ( !child.parent ) return false;
+
+        if ( child.parent === obj ) return true;
+        else return isChild( obj, child.parent );
+    }
+
+    function name(d) {
+        if ( !d.id ) d.id = guid();
+
+        return d.id;
+    }
+
+    function guid() {
+        function s4() {
+            return Math.floor((1 + Math.random()) * 0x10000)
+                    .toString(16)
+                    .substring(1);
+        }
+        return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+                s4() + '-' + s4() + s4() + s4();
+    }
+
+    d3.select(self.frameElement).style("height", diameter + "px");
+
+</script>
