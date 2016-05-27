@@ -22,7 +22,7 @@
         pointer-events: none;
         cursor: default;
     }
-    .label,
+
     .node--root,
     .node--leaf {
         pointer-events: all;
@@ -57,7 +57,7 @@
             .range(["hsl(52,80%,80%)", "hsl(228,30%,40%)"])
             .interpolate(d3.interpolateHcl);
 
-
+    var lastCircle = null;
     var pack = d3.layout.pack()
             .padding(2)
             .size([diameter - margin, diameter - margin])
@@ -159,10 +159,10 @@
                     });
 
             text.transition().duration(200).style("fill-opacity", function(d) {
-                return +(d.depth === Math.round( zoomBehaviour.scale()/1.2 ));
+                return +(d3.select(this).node().getComputedTextLength() < 2.5*d.r);
             });
             text.style("display", function(d) {
-                return d.depth === Math.round( zoomBehaviour.scale()/1.2 ) ? 'inline' : 'none';
+                return d3.select(this).node().getComputedTextLength() < 2.5*d.r ? 'inline' : 'none';
             });
         }
 
@@ -172,7 +172,7 @@
                 return 14*1/zoomBehaviour.scale();
             })
                     .style("display", function(d) {
-                        return d.depth === Math.round( zoomBehaviour.scale()/1.2 ) ? 'inline' : 'none';
+                        return d3.select(this).node().getComputedTextLength() < 2.5*d.r ? 'inline' : 'none';
                     })
                     .transition().duration(500)
                     .attr('x', function(d){
@@ -188,7 +188,7 @@
                     .attr('cx', function(d){ return (d.x - diameter/2); })
                     .attr('cy', function(d){ return (d.y - diameter/2); })
                     .attr('opacity', 1)
-                    .style("fill", function(d) { return d.children ? color(d.depth) : null; });
+                    .style("fill", function(d) { return this === lastCircle ? '#FFB84D' : d.children ? color(d.depth) : null; });
         }
 
         function dragStart(d,i){
@@ -277,6 +277,7 @@
 
                 console.log("Node " + d.name + " has new parent " + d.parent.name);
 
+                lastCircle = this;
                 updateNodes();
 
             }
