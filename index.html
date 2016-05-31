@@ -64,7 +64,7 @@
             .value(function(d) { return d.size; })
 
     var zoomBehaviour = d3.behavior.zoom()
-            .scaleExtent([1, 5])
+            .scaleExtent([1, 10])
             .translate( [width/2,height/2] );
 
     var svg = d3.select("body").append("svg")
@@ -115,7 +115,7 @@
         var text = group.selectAll("text")
                 .data(nodes.filter( function(d) { return d.depth !== 0; }),name)
                 .enter().append("text")
-                .attr("class", "label")
+                .attr('dy','0.25em').attr("class", "label")
                 .style("fill-opacity", function(d) { return d.parent === root ? 1 : 0; })
                 .style("display", function(d) { return d.parent === root ? "inline" : "none"; })
                 .text(function(d) { return d.name; });
@@ -159,10 +159,10 @@
                     });
 
             text.transition().duration(200).style("fill-opacity", function(d) {
-                return +(d3.select(this).node().getComputedTextLength() < 2.5*d.r);
+                return +( fitsIntoCircle.call(this,d) );
             });
             text.style("display", function(d) {
-                return d3.select(this).node().getComputedTextLength() < 2.5*d.r ? 'inline' : 'none';
+                return fitsIntoCircle.call(this,d) ? 'inline' : 'none';
             });
         }
 
@@ -172,7 +172,7 @@
                 return 14*1/zoomBehaviour.scale();
             })
                     .style("display", function(d) {
-                        return d3.select(this).node().getComputedTextLength() < 2.5*d.r ? 'inline' : 'none';
+                        return fitsIntoCircle.call(this,d) ? 'inline' : 'none';
                     })
                     .transition().duration(500)
                     .attr('x', function(d){
@@ -272,7 +272,7 @@
                 circle.sort(function(a,b){ return a.depth - b.depth; });
 
                 text = group.selectAll(".label").data(nodes.filter( function(d) { return d.depth !== 0; }),name);
-                text.enter().append("text").attr("class", "label").text(function(d) { return d.name; });
+                text.enter().append("text").attr('dy','0.25em').attr("class", "label").text(function(d) { return d.name; });
                 text.exit().remove();
 
                 console.log("Node " + d.name + " has new parent " + d.parent.name);
@@ -296,6 +296,10 @@
         }
 
     });
+    
+    function fitsIntoCircle(d){
+        return d3.select(this).node().getComputedTextLength() < 1.9*d.r
+    }
 
     function isChild( obj, child ) {
         if ( !child.parent ) return false;
